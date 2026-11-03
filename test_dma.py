@@ -230,3 +230,67 @@ async def test_dma_nonzero_src(dut):
     assert received == [0x55555555, 0x66666666, 0x77777777], f"Data wrong! Got {[hex(x) for x in received]}"
     assert lasts == [0, 0, 1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: non-zero SRC_ADDR test passed.")
+    
+@cocotb.test()
+async def test_dma_back_to_back(dut):
+    """Two transfers in a row, no reset between them."""
+    cocotb.start_soon(Clock(dut.aclk, 10, unit="ns").start())
+
+    dut.aresetn.value = 0
+    dut.s_axi_awvalid.value = 0
+    dut.s_axi_awaddr.value = 0
+    dut.s_axi_wvalid.value = 0
+    dut.s_axi_wdata.value = 0
+    dut.s_axi_wstrb.value = 0
+    dut.s_axi_bready.value = 0
+    dut.m_axis_tready.value = 0
+
+    for _ in range(3):
+        await RisingEdge(dut.aclk)
+    dut.aresetn.value = 1
+    await RisingEdge(dut.aclk)
+
+    first = [0x10, 0x20]
+    second = [0xA1, 0xA2, 0xA3]
+
+    for i, word in enumerate(first):
+        await axi_write(dut, 0x100 + 4 * i, word)          # SRAM[0..1]
+    for i, word in enumerate(second):
+        await axi_write(dut, 0x100 + 4 * (4 + i), word)    # SRAM[4..6]
+
+    received = []
+    lasts = []
+
+    async def monitor():
+        while True:
+            await RisingEdge(dut.aclk)
+            if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
+                received.append(int(dut.m_axis_tdata.value))
+                lasts.append(int(dut.m_axis_tlast.value))
+
+    cocotb.start_soon(monitor())
+    dut.m_axis_tready.value = 1
+
+    # Transfer 1: SRAM[0], 2 words
+    await axi_write(dut, 0x08, 0x0)
+    await axi_write(dut, 0x0C, 0x2)
+    await axi_write(dut, 0x00, 0x1)
+    for _ in range(30):
+        await RisingEdge(dut.aclk)
+
+    assert received == first, f"Transfer 1 data wrong! Got {[hex(x) for x in received]}"
+    assert lasts == [0, 1], f"Transfer 1 TLAST wrong! Got {lasts}"
+
+    received.clear()
+    lasts.clear()
+
+    # Transfer 2: SRAM[4], 3 words, NO reset
+    await axi_write(dut, 0x08, 0x4)
+    await axi_write(dut, 0x0C, 0x3)
+    await axi_write(dut, 0x00, 0x1)
+    for _ in range(30):
+        await RisingEdge(dut.aclk)
+
+    assert received == second, f"Transfer 2 data wrong! Got {[hex(x) for x in received]}"
+    assert lasts == [0, 0, 1], f"Transfer 2 TLAST wrong! Got {lasts}"
+    dut._log.info("SUCCESS: back-to-back transfers passed.")
