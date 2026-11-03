@@ -179,3 +179,54 @@ async def test_dma_backpressure(dut):
     assert received == expected, f"Data wrong! Got {[hex(x) for x in received]}"
     assert lasts == [0] * 7 + [1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: backpressure test passed.")
+    
+@cocotb.test()
+async def test_dma_nonzero_src(dut):
+    """Start at SRAM[5], move 3 words. Neighbours must NOT be sent."""
+    cocotb.start_soon(Clock(dut.aclk, 10, unit="ns").start())
+
+    dut.aresetn.value = 0
+    dut.s_axi_awvalid.value = 0
+    dut.s_axi_awaddr.value = 0
+    dut.s_axi_wvalid.value = 0
+    dut.s_axi_wdata.value = 0
+    dut.s_axi_wstrb.value = 0
+    dut.s_axi_bready.value = 0
+    dut.m_axis_tready.value = 0
+
+    for _ in range(3):
+        await RisingEdge(dut.aclk)
+    dut.aresetn.value = 1
+    await RisingEdge(dut.aclk)
+
+    # SRAM[4] and SRAM[8] are "guard" words that must never appear in the output
+    await axi_write(dut, 0x100 + 4 * 4, 0xBAD00004)
+    await axi_write(dut, 0x100 + 4 * 5, 0x55555555)
+    await axi_write(dut, 0x100 + 4 * 6, 0x66666666)
+    await axi_write(dut, 0x100 + 4 * 7, 0x77777777)
+    await axi_write(dut, 0x100 + 4 * 8, 0xBAD00008)
+
+    await axi_write(dut, 0x08, 0x5)   # SRC_ADDR = 5
+    await axi_write(dut, 0x0C, 0x3)   # XFER_LEN = 3
+
+    received = []
+    lasts = []
+
+    async def monitor():
+        while True:
+            await RisingEdge(dut.aclk)
+            if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
+                received.append(int(dut.m_axis_tdata.value))
+                lasts.append(int(dut.m_axis_tlast.value))
+
+    cocotb.start_soon(monitor())
+
+    dut.m_axis_tready.value = 1
+    await axi_write(dut, 0x00, 0x1)   # START
+
+    for _ in range(50):
+        await RisingEdge(dut.aclk)
+
+    assert received == [0x55555555, 0x66666666, 0x77777777], f"Data wrong! Got {[hex(x) for x in received]}"
+    assert lasts == [0, 0, 1], f"TLAST wrong! Got {lasts}"
+    dut._log.info("SUCCESS: non-zero SRC_ADDR test passed.")
