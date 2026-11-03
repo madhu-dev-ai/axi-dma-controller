@@ -122,3 +122,60 @@ async def test_dma_multi_word(dut):
     assert received == expected, f"Data mismatch! Got {[hex(x) for x in received]}"
     assert lasts == [0, 0, 0, 1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: 4-word transfer verified.")
+    
+@cocotb.test()
+async def test_dma_backpressure(dut):
+    """8-word transfer with tready toggling randomly. No word lost or repeated."""
+    import random
+    random.seed(1)
+
+    cocotb.start_soon(Clock(dut.aclk, 10, unit="ns").start())
+
+    dut.aresetn.value = 0
+    dut.s_axi_awvalid.value = 0
+    dut.s_axi_awaddr.value = 0
+    dut.s_axi_wvalid.value = 0
+    dut.s_axi_wdata.value = 0
+    dut.s_axi_wstrb.value = 0
+    dut.s_axi_bready.value = 0
+    dut.m_axis_tready.value = 0
+
+    for _ in range(3):
+        await RisingEdge(dut.aclk)
+    dut.aresetn.value = 1
+    await RisingEdge(dut.aclk)
+
+    expected = [0xA0 + i for i in range(8)]
+
+    for i, word in enumerate(expected):
+        await axi_write(dut, 0x100 + 4 * i, word)
+
+    await axi_write(dut, 0x08, 0x0)   # SRC_ADDR = 0
+    await axi_write(dut, 0x0C, 0x8)   # XFER_LEN = 8
+
+    received = []
+    lasts = []
+
+    async def monitor():
+        while True:
+            await RisingEdge(dut.aclk)
+            if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
+                received.append(int(dut.m_axis_tdata.value))
+                lasts.append(int(dut.m_axis_tlast.value))
+
+    async def tready_driver():
+        while True:
+            await RisingEdge(dut.aclk)
+            dut.m_axis_tready.value = random.randint(0, 1)
+
+    cocotb.start_soon(monitor())
+    cocotb.start_soon(tready_driver())
+
+    await axi_write(dut, 0x00, 0x1)   # START
+
+    for _ in range(200):
+        await RisingEdge(dut.aclk)
+
+    assert received == expected, f"Data wrong! Got {[hex(x) for x in received]}"
+    assert lasts == [0] * 7 + [1], f"TLAST wrong! Got {lasts}"
+    dut._log.info("SUCCESS: backpressure test passed.")
