@@ -50,6 +50,22 @@ The 1-word transfer (`DEADBEEF`, `tvalid` and `tlast` high together) and the sta
 
 
 
+## Bug found and fixed: zero-length transfer
+
+**Bug:** writing `XFER_LEN = 0` and then START made the DMA run forever. The last-word check `count == length - 1` can never match when `length` is 0 (the subtraction wraps around), so `tlast` never went high. The DMA kept streaming SRAM contents, including leftover data and uninitialised `X` values.
+
+**Found by:** the `test_dma_zero_length` cocotb test, which expects no output for a zero-length transfer.
+
+**Before the fix:** `tvalid` stays high and `tlast` never rises.
+
+![Before the fix](docs/waveform_bug_before.png)
+
+**Fix:** the DMA now ignores a START command when `XFER_LEN` is 0 (`if (s_axi_wdata[0] && length != 0)`).
+
+**After the fix:** `tvalid` and `tlast` stay low for the whole test.
+
+![After the fix](docs/waveform_bug_after.png)
+
 ## Run the test
 
 
@@ -70,7 +86,7 @@ Requires Python, cocotb and Icarus Verilog.
 
 
 
-`test_dma.py` contains 5 cocotb tests:
+`test_dma.py` contains 6 cocotb tests:
 
 
 
@@ -83,4 +99,6 @@ Requires Python, cocotb and Icarus Verilog.
 - Non-zero `SRC_ADDR` (start at SRAM[5])
 
 - Back-to-back transfers without reset
+
+- Zero-length transfer (found a real bug, see above)
 

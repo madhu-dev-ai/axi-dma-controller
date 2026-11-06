@@ -122,7 +122,8 @@ async def test_dma_multi_word(dut):
     assert received == expected, f"Data mismatch! Got {[hex(x) for x in received]}"
     assert lasts == [0, 0, 0, 1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: 4-word transfer verified.")
-    
+
+
 @cocotb.test()
 async def test_dma_backpressure(dut):
     """8-word transfer with tready toggling randomly. No word lost or repeated."""
@@ -179,7 +180,8 @@ async def test_dma_backpressure(dut):
     assert received == expected, f"Data wrong! Got {[hex(x) for x in received]}"
     assert lasts == [0] * 7 + [1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: backpressure test passed.")
-    
+
+
 @cocotb.test()
 async def test_dma_nonzero_src(dut):
     """Start at SRAM[5], move 3 words. Neighbours must NOT be sent."""
@@ -230,7 +232,8 @@ async def test_dma_nonzero_src(dut):
     assert received == [0x55555555, 0x66666666, 0x77777777], f"Data wrong! Got {[hex(x) for x in received]}"
     assert lasts == [0, 0, 1], f"TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: non-zero SRC_ADDR test passed.")
-    
+
+
 @cocotb.test()
 async def test_dma_back_to_back(dut):
     """Two transfers in a row, no reset between them."""
@@ -294,3 +297,47 @@ async def test_dma_back_to_back(dut):
     assert received == second, f"Transfer 2 data wrong! Got {[hex(x) for x in received]}"
     assert lasts == [0, 0, 1], f"Transfer 2 TLAST wrong! Got {lasts}"
     dut._log.info("SUCCESS: back-to-back transfers passed.")
+
+
+@cocotb.test()
+async def test_dma_zero_length(dut):
+    """XFER_LEN = 0 must send nothing and must not hang."""
+    cocotb.start_soon(Clock(dut.aclk, 10, unit="ns").start())
+
+    dut.aresetn.value = 0
+    dut.s_axi_awvalid.value = 0
+    dut.s_axi_awaddr.value = 0
+    dut.s_axi_wvalid.value = 0
+    dut.s_axi_wdata.value = 0
+    dut.s_axi_wstrb.value = 0
+    dut.s_axi_bready.value = 0
+    dut.m_axis_tready.value = 0
+
+    for _ in range(3):
+        await RisingEdge(dut.aclk)
+    dut.aresetn.value = 1
+    await RisingEdge(dut.aclk)
+
+    await axi_write(dut, 0x100, 0xCAFE0001)   # SRAM[0]
+    await axi_write(dut, 0x08, 0x0)           # SRC_ADDR = 0
+    await axi_write(dut, 0x0C, 0x0)           # XFER_LEN = 0
+
+    received = []
+
+    async def monitor():
+        while True:
+            await RisingEdge(dut.aclk)
+            if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
+                received.append(str(dut.m_axis_tdata.value))
+
+    cocotb.start_soon(monitor())
+
+    dut.m_axis_tready.value = 1
+    await axi_write(dut, 0x00, 0x1)           # START
+
+    for _ in range(60):
+        await RisingEdge(dut.aclk)
+
+    assert received == [], f"DMA sent {len(received)} words for XFER_LEN=0!"
+    assert dut.dma_active.value == 0, "DMA is still active after a zero-length transfer!"
+    dut._log.info("SUCCESS: zero-length transfer ignored.")

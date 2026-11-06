@@ -78,7 +78,7 @@ module dma_engine (
 
                 if (s_axi_awaddr == 32'h00) begin
                     // Start DMA
-                    if (s_axi_wdata[0]) begin
+                    if (s_axi_wdata[0] && length != 0) begin
                         dma_active <= 1;
                         ptr        <= src;   // start reading at SRC_ADDR
                         count      <= 0;
