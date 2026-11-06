@@ -8,6 +8,21 @@ A simple DMA engine written in SystemVerilog, verified with cocotb and Icarus Ve
 
 
 
+## Architecture
+
+```mermaid
+flowchart LR
+    TB["AXI4-Lite master (cocotb testbench)"] -->|"register and SRAM writes"| SL["AXI4-Lite slave interface"]
+    subgraph DUT["dma_engine"]
+        SL --> REG["Control registers: CTRL, SRC_ADDR, XFER_LEN"]
+        SL --> MEM["16-word SRAM"]
+        REG --> FSM["DMA read logic: ptr, count"]
+        MEM --> FSM
+    end
+    FSM -->|"tdata, tvalid, tlast"| RX["AXI-Stream receiver (testbench)"]
+    RX -->|"tready"| FSM
+```
+
 ## Features
 
 
