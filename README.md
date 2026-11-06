@@ -119,3 +119,17 @@ Requires Python, cocotb and Icarus Verilog.
 
 - Zero-length transfer (found a real bug, see above)
 
+## What I learned
+
+- **Read the handshake, don't assume it.** My first test lost its writes because it held `awvalid` and `wvalid` high for one clock without waiting for `awready` and `wready`. The fix was a reusable `axi_write` task that waits for every handshake.
+- **A register map is a contract.** The testbench and the RTL disagreed on which address held `SRC_ADDR` and which held `XFER_LEN`. A mismatch like this fails silently, and it only showed up as a missing `tlast`.
+- **AXI-Stream means holding `tvalid` until `tready`.** The first RTL dropped `tvalid` on the last word without waiting for the receiver. The random backpressure test now guards against this.
+- **Passing tests only cover what you thought of.** Five tests passed, and the sixth (zero-length transfer) found a real bug. Edge cases are where verification earns its value.
+- **Waveforms explain failures faster than logs.** The before and after pictures show the bug and the fix at a glance.
+- **Automate it.** GitHub Actions runs all tests on a clean machine for every push.
+
+## Possible next steps
+
+- Code coverage report
+- Randomised data and length tests
+- Error responses for invalid addresses
