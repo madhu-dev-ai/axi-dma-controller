@@ -34,6 +34,18 @@ A simple DMA engine written in SystemVerilog, verified with cocotb and Icarus Ve
 
 
 
+\## Waveform
+
+
+
+The 1-word transfer (`DEADBEEF`, `tvalid` and `tlast` high together) and the start of the 4-word transfer, viewed in GTKWave:
+
+
+
+!\[DMA waveform](docs/waveform.png)
+
+
+
 \## Run the test
 
 

@@ -1,0 +1,29 @@
+[*]
+[*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
+[*] Fri Nov 06 06:31:24 2026
+[*]
+[dumpfile] "C:\Users\lenovo\vlsI-projects\dma-controller\sim_build\dma_engine.fst"
+[dumpfile_mtime] "Thu Nov 05 17:56:15 2026"
+[dumpfile_size] 1551
+[savefile] "C:\Users\lenovo\vlsI-projects\dma-controller\dma_view.gtkw"
+[timestart] 0
+[size] 1920 973
+[pos] -59 -56
+*-16.607582 2450000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[sst_width] 280
+[signals_width] 210
+[sst_expanded] 1
+[sst_vpaned_height] 287
+@28
+dma_engine.aclk
+dma_engine.aresetn
+dma_engine.s_axi_awready
+dma_engine.s_axi_awvalid
+dma_engine.m_axis_tvalid
+@22
+dma_engine.m_axis_tdata[31:0]
+@28
+dma_engine.m_axis_tready
+dma_engine.m_axis_tlast
+[pattern_trace] 1
+[pattern_trace] 0

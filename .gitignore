@@ -4,3 +4,4 @@ results.xml
 simulation_log.txt
 desktop.ini
 *.vcd
+*.fst
