@@ -341,3 +341,81 @@ async def test_dma_zero_length(dut):
     assert received == [], f"DMA sent {len(received)} words for XFER_LEN=0!"
     assert dut.dma_active.value == 0, "DMA is still active after a zero-length transfer!"
     dut._log.info("SUCCESS: zero-length transfer ignored.")
+    
+@cocotb.test()
+async def test_dma_random(dut):
+    """30 random transfers: random SRC_ADDR, random length, random backpressure."""
+    import random
+    seed = 12345
+    random.seed(seed)
+    dut._log.info(f"Random seed: {seed}")
+
+    cocotb.start_soon(Clock(dut.aclk, 10, unit="ns").start())
+
+    dut.aresetn.value = 0
+    dut.s_axi_awvalid.value = 0
+    dut.s_axi_awaddr.value = 0
+    dut.s_axi_wvalid.value = 0
+    dut.s_axi_wdata.value = 0
+    dut.s_axi_wstrb.value = 0
+    dut.s_axi_bready.value = 0
+    dut.m_axis_tready.value = 0
+
+    for _ in range(3):
+        await RisingEdge(dut.aclk)
+    dut.aresetn.value = 1
+    await RisingEdge(dut.aclk)
+
+    # Fill all 16 SRAM words with random data
+    mem = [random.getrandbits(32) for _ in range(16)]
+    for i, word in enumerate(mem):
+        await axi_write(dut, 0x100 + 4 * i, word)
+
+    received = []
+    lasts = []
+
+    async def monitor():
+        while True:
+            await RisingEdge(dut.aclk)
+            if dut.m_axis_tvalid.value == 1 and dut.m_axis_tready.value == 1:
+                received.append(int(dut.m_axis_tdata.value))
+                lasts.append(int(dut.m_axis_tlast.value))
+
+    async def tready_driver():
+        while True:
+            await RisingEdge(dut.aclk)
+            dut.m_axis_tready.value = 1 if random.random() < 0.7 else 0
+
+    cocotb.start_soon(monitor())
+    cocotb.start_soon(tready_driver())
+
+    for n in range(30):
+        src = random.randint(0, 15)
+        length = random.randint(1, min(15, 16 - src))   # stay inside the SRAM, no wrap-around
+        expected = mem[src:src + length]
+
+        received.clear()
+        lasts.clear()
+
+        await axi_write(dut, 0x08, src)
+        await axi_write(dut, 0x0C, length)
+        await axi_write(dut, 0x00, 0x1)
+
+        for _ in range(500):
+            await RisingEdge(dut.aclk)
+            if lasts and lasts[-1] == 1:
+                break
+        else:
+            assert False, f"Run {n}: timeout (src={src}, length={length}), got {len(received)} words"
+
+        for _ in range(5):
+            await RisingEdge(dut.aclk)
+
+        assert received == expected, (
+            f"Run {n} (src={src}, length={length}) data wrong!\n"
+            f"expected {[hex(x) for x in expected]}\n"
+            f"got      {[hex(x) for x in received]}"
+        )
+        assert lasts == [0] * (length - 1) + [1], f"Run {n} (src={src}, length={length}) TLAST wrong! Got {lasts}"
+
+    dut._log.info("SUCCESS: 30 random transfers passed.")

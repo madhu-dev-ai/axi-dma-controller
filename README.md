@@ -103,7 +103,7 @@ Requires Python, cocotb and Icarus Verilog.
 
 
 
-`test_dma.py` contains 6 cocotb tests:
+`test_dma.py` contains 7 cocotb tests:
 
 
 
@@ -119,6 +119,8 @@ Requires Python, cocotb and Icarus Verilog.
 
 - Zero-length transfer (found a real bug, see above)
 
+- Randomised: 30 transfers with random `SRC_ADDR`, length, data and `tready` (fixed seed, so it is repeatable)
+
 ## What I learned
 
 - **Read the handshake, don't assume it.** My first test lost its writes because it held `awvalid` and `wvalid` high for one clock without waiting for `awready` and `wready`. The fix was a reusable `axi_write` task that waits for every handshake.
@@ -131,5 +133,4 @@ Requires Python, cocotb and Icarus Verilog.
 ## Possible next steps
 
 - Code coverage report
-- Randomised data and length tests
 - Error responses for invalid addresses
