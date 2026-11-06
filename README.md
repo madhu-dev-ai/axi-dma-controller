@@ -1,5 +1,7 @@
 # AXI DMA Controller
 
+[![Simulation tests](https://github.com/madhu-dev-ai/axi-dma-controller/actions/workflows/test.yml/badge.svg)](https://github.com/madhu-dev-ai/axi-dma-controller/actions/workflows/test.yml)
+
 
 
 A simple DMA engine written in SystemVerilog, verified with cocotb and Icarus Verilog.
